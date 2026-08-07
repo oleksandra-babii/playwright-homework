@@ -28,7 +28,13 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. Update to the site under test. */
-    // baseURL: 'http://localhost:3000',
+    baseURL: 'https://qauto.forstudy.space/',
+
+    /* The site is protected by HTTP Basic Auth in addition to its own login form. */
+    httpCredentials: {
+      username: 'guest',
+      password: 'welcome2qauto',
+    },
 
     /* Collect trace on the first retry of a failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
