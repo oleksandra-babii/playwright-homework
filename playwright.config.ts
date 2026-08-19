@@ -1,12 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// import dotenv from 'dotenv';
-// import path from 'path';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
+import { env } from './config/env';
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -27,14 +20,11 @@ export default defineConfig({
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. Update to the site under test. */
-    baseURL: 'https://qauto.forstudy.space/',
+    /* Base URL to use in actions like `await page.goto('/')`. Configured via .env (see .env.example). */
+    baseURL: env.baseUrl,
 
     /* The site is protected by HTTP Basic Auth in addition to its own login form. */
-    httpCredentials: {
-      username: 'guest',
-      password: 'welcome2qauto',
-    },
+    httpCredentials: env.httpCredentials,
 
     /* Collect trace on the first retry of a failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
