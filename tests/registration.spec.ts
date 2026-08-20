@@ -1,4 +1,6 @@
-import { test, expect, Locator, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { HomePage } from './pages/homePage';
+import { SignupModal } from './pages/signupModal';
 import { validSignupData } from './utils/testData';
 
 /**
@@ -6,161 +8,116 @@ import { validSignupData } from './utils/testData';
  * Every user created here gets an email starting with the `autotest_` prefix
  * (see utils/testData.ts) so autotest accounts can be told apart from real ones.
  */
-
-type SignupField = 'name' | 'lastName' | 'email' | 'password' | 'repeatPassword';
-
-interface SignupFormData {
-  name?: string;
-  lastName?: string;
-  email?: string;
-  password?: string;
-  repeatPassword?: string;
-}
-
-function signupInputs(page: Page): Record<SignupField, Locator> {
-  return {
-    name: page.locator('#signupName'),
-    lastName: page.locator('#signupLastName'),
-    email: page.locator('#signupEmail'),
-    password: page.locator('#signupPassword'),
-    repeatPassword: page.locator('#signupRepeatPassword'),
-  };
-}
-
-/** Fills the given fields and blurs each one (Tab) so Angular marks it "touched" and runs validation. */
-async function fillAndBlur(page: Page, data: SignupFormData): Promise<void> {
-  const inputs = signupInputs(page);
-  for (const [field, value] of Object.entries(data) as [SignupField, string][]) {
-    await inputs[field].fill(value);
-    await inputs[field].press('Tab');
-  }
-}
-
-/** Fills the given fields without blurring (form stays "pristine" for the untouched fields). */
-async function fillSignup(page: Page, data: SignupFormData): Promise<void> {
-  const inputs = signupInputs(page);
-  for (const [field, value] of Object.entries(data) as [SignupField, string][]) {
-    await inputs[field].fill(value);
-  }
-}
-
-function errorMessagesFor(page: Page, field: SignupField): Locator {
-  return signupInputs(page)[field]
-    .locator('xpath=ancestor::div[contains(@class,"form-group")]')
-    .locator('.invalid-feedback p');
-}
-
-async function openSignupModal(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Sign up' }).click();
-}
-
 test.describe('Registration form', () => {
+  let homePage: HomePage;
+  let signupModal: SignupModal;
+
   test.beforeEach(async ({ page }) => {
-    await openSignupModal(page);
+    homePage = new HomePage(page);
+    signupModal = new SignupModal(page);
+    await homePage.open();
+    await homePage.openSignupModal();
   });
 
   test('registers a new user when all fields are filled in correctly', async ({ page }) => {
     const data = validSignupData();
-    const registerButton = page.getByRole('button', { name: 'Register' });
 
-    await fillAndBlur(page, data);
-    await expect(registerButton).toBeEnabled();
+    await signupModal.fillAndBlur(data);
+    await expect(signupModal.registerButton).toBeEnabled();
 
-    await registerButton.click();
+    await signupModal.submit();
 
     await expect(page).toHaveURL(/\/panel\/garage/);
     await expect(page.getByRole('heading', { name: 'Garage' })).toBeVisible();
     await expect(page.getByText('Log out', { exact: true })).toBeVisible();
   });
 
-  test('shows a "required" error for every field and keeps Register disabled on an empty submit', async ({ page }) => {
-    const inputs = signupInputs(page);
-    await inputs.name.press('Tab');
-    await inputs.lastName.press('Tab');
-    await inputs.email.press('Tab');
-    await inputs.password.press('Tab');
-    await inputs.repeatPassword.press('Tab');
+  test('shows a "required" error for every field and keeps Register disabled on an empty submit', async () => {
+    await signupModal.nameInput.press('Tab');
+    await signupModal.lastNameInput.press('Tab');
+    await signupModal.emailInput.press('Tab');
+    await signupModal.passwordInput.press('Tab');
+    await signupModal.repeatPasswordInput.press('Tab');
 
-    await expect(errorMessagesFor(page, 'name')).toHaveText('Name required');
-    await expect(errorMessagesFor(page, 'lastName')).toHaveText('Last name required');
-    await expect(errorMessagesFor(page, 'email')).toHaveText('Email required');
-    await expect(errorMessagesFor(page, 'password')).toHaveText('Password required');
-    await expect(errorMessagesFor(page, 'repeatPassword')).toHaveText('Re-enter password required');
+    await expect(signupModal.errorMessagesFor('name')).toHaveText('Name required');
+    await expect(signupModal.errorMessagesFor('lastName')).toHaveText('Last name required');
+    await expect(signupModal.errorMessagesFor('email')).toHaveText('Email required');
+    await expect(signupModal.errorMessagesFor('password')).toHaveText('Password required');
+    await expect(signupModal.errorMessagesFor('repeatPassword')).toHaveText('Re-enter password required');
 
     for (const field of ['name', 'lastName', 'email', 'password', 'repeatPassword'] as const) {
-      await expect(inputs[field]).toHaveClass(/is-invalid/);
+      await expect(signupModal.input(field)).toHaveClass(/is-invalid/);
     }
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows a length error when Name is shorter than 2 characters', async ({ page }) => {
-    await fillAndBlur(page, { name: 'A' });
+  test('shows a length error when Name is shorter than 2 characters', async () => {
+    await signupModal.fillAndBlur({ name: 'A' });
 
-    await expect(errorMessagesFor(page, 'name')).toHaveText(
+    await expect(signupModal.errorMessagesFor('name')).toHaveText(
       'Name has to be from 2 to 20 characters long',
     );
-    await expect(signupInputs(page).name).toHaveClass(/is-invalid/);
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.nameInput).toHaveClass(/is-invalid/);
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows an "invalid" error when Name contains digits', async ({ page }) => {
-    await fillAndBlur(page, { name: 'Anna4' });
+  test('shows an "invalid" error when Name contains digits', async () => {
+    await signupModal.fillAndBlur({ name: 'Anna4' });
 
-    await expect(errorMessagesFor(page, 'name')).toHaveText('Name is invalid');
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.errorMessagesFor('name')).toHaveText('Name is invalid');
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows a length error when Name is longer than 20 characters', async ({ page }) => {
-    await fillAndBlur(page, { name: 'A'.repeat(21) });
+  test('shows a length error when Name is longer than 20 characters', async () => {
+    await signupModal.fillAndBlur({ name: 'A'.repeat(21) });
 
-    await expect(errorMessagesFor(page, 'name')).toHaveText(
+    await expect(signupModal.errorMessagesFor('name')).toHaveText(
       'Name has to be from 2 to 20 characters long',
     );
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('does not trim surrounding spaces in Name, contrary to the written requirement', async ({ page }) => {
+  test('does not trim surrounding spaces in Name, contrary to the written requirement', async () => {
     // The spec says the Name field should ignore/trim surrounding spaces, but the
     // live app flags a space-padded value as invalid instead of trimming it first.
-    await fillAndBlur(page, { name: '  Anna  ' });
+    await signupModal.fillAndBlur({ name: '  Anna  ' });
 
-    await expect(errorMessagesFor(page, 'name')).toHaveText('Name is invalid');
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.errorMessagesFor('name')).toHaveText('Name is invalid');
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows a length error when Last name is shorter than 2 characters', async ({ page }) => {
-    await fillAndBlur(page, { lastName: 'B' });
+  test('shows a length error when Last name is shorter than 2 characters', async () => {
+    await signupModal.fillAndBlur({ lastName: 'B' });
 
-    await expect(errorMessagesFor(page, 'lastName')).toHaveText(
+    await expect(signupModal.errorMessagesFor('lastName')).toHaveText(
       'Last name has to be from 2 to 20 characters long',
     );
-    await expect(signupInputs(page).lastName).toHaveClass(/is-invalid/);
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.lastNameInput).toHaveClass(/is-invalid/);
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows a length error when Last name is longer than 20 characters', async ({ page }) => {
-    await fillAndBlur(page, { lastName: 'B'.repeat(21) });
+  test('shows a length error when Last name is longer than 20 characters', async () => {
+    await signupModal.fillAndBlur({ lastName: 'B'.repeat(21) });
 
-    await expect(errorMessagesFor(page, 'lastName')).toHaveText(
+    await expect(signupModal.errorMessagesFor('lastName')).toHaveText(
       'Last name has to be from 2 to 20 characters long',
     );
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows an "invalid" error when Last name contains digits', async ({ page }) => {
-    await fillAndBlur(page, { lastName: 'Smith4' });
+  test('shows an "invalid" error when Last name contains digits', async () => {
+    await signupModal.fillAndBlur({ lastName: 'Smith4' });
 
-    await expect(errorMessagesFor(page, 'lastName')).toHaveText('Last name is invalid');
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.errorMessagesFor('lastName')).toHaveText('Last name is invalid');
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('shows an "incorrect" error for a malformed email address', async ({ page }) => {
-    await fillAndBlur(page, { email: 'not-an-email' });
+  test('shows an "incorrect" error for a malformed email address', async () => {
+    await signupModal.fillAndBlur({ email: 'not-an-email' });
 
-    await expect(errorMessagesFor(page, 'email')).toHaveText('Email is incorrect');
-    await expect(signupInputs(page).email).toHaveClass(/is-invalid/);
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.errorMessagesFor('email')).toHaveText('Email is incorrect');
+    await expect(signupModal.emailInput).toHaveClass(/is-invalid/);
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
   const weakPasswords: Array<[string, string]> = [
@@ -172,60 +129,59 @@ test.describe('Registration form', () => {
   ];
 
   for (const [password, reason] of weakPasswords) {
-    test(`rejects a password that ${reason}`, async ({ page }) => {
-      await fillAndBlur(page, { password });
+    test(`rejects a password that ${reason}`, async () => {
+      await signupModal.fillAndBlur({ password });
 
-      await expect(errorMessagesFor(page, 'password')).toHaveText(
+      await expect(signupModal.errorMessagesFor('password')).toHaveText(
         'Password has to be from 8 to 15 characters long and contain at least one integer, one capital, and one small letter',
       );
-      await expect(signupInputs(page).password).toHaveClass(/is-invalid/);
-      await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+      await expect(signupModal.passwordInput).toHaveClass(/is-invalid/);
+      await expect(signupModal.registerButton).toBeDisabled();
     });
   }
 
-  test('shows a "do not match" error when Re-enter password differs from Password', async ({ page }) => {
-    await fillAndBlur(page, { password: 'ValidPass1', repeatPassword: 'Other1234' });
+  test('shows a "do not match" error when Re-enter password differs from Password', async () => {
+    await signupModal.fillAndBlur({ password: 'ValidPass1', repeatPassword: 'Other1234' });
 
-    await expect(errorMessagesFor(page, 'repeatPassword')).toHaveText('Passwords do not match');
-    await expect(signupInputs(page).repeatPassword).toHaveClass(/is-invalid/);
-    await expect(page.getByRole('button', { name: 'Register' })).toBeDisabled();
+    await expect(signupModal.errorMessagesFor('repeatPassword')).toHaveText('Passwords do not match');
+    await expect(signupModal.repeatPasswordInput).toHaveClass(/is-invalid/);
+    await expect(signupModal.registerButton).toBeDisabled();
   });
 
-  test('keeps the Register button disabled until every field becomes valid', async ({ page }) => {
+  test('keeps the Register button disabled until every field becomes valid', async () => {
     const data = validSignupData();
-    const registerButton = page.getByRole('button', { name: 'Register' });
 
-    await fillSignup(page, { name: data.name });
-    await expect(registerButton).toBeDisabled();
+    await signupModal.fill({ name: data.name });
+    await expect(signupModal.registerButton).toBeDisabled();
 
-    await fillSignup(page, { lastName: data.lastName });
-    await expect(registerButton).toBeDisabled();
+    await signupModal.fill({ lastName: data.lastName });
+    await expect(signupModal.registerButton).toBeDisabled();
 
-    await fillSignup(page, { email: data.email });
-    await expect(registerButton).toBeDisabled();
+    await signupModal.fill({ email: data.email });
+    await expect(signupModal.registerButton).toBeDisabled();
 
-    await fillSignup(page, { password: data.password });
-    await expect(registerButton).toBeDisabled();
+    await signupModal.fill({ password: data.password });
+    await expect(signupModal.registerButton).toBeDisabled();
 
-    await fillSignup(page, { repeatPassword: data.repeatPassword });
-    await expect(registerButton).toBeEnabled();
+    await signupModal.fill({ repeatPassword: data.repeatPassword });
+    await expect(signupModal.registerButton).toBeEnabled();
   });
 
   test('rejects registration with an email that is already taken', async ({ page }) => {
     const data = validSignupData();
-    const registerButton = page.getByRole('button', { name: 'Register' });
 
-    await fillAndBlur(page, data);
-    await registerButton.click();
+    await signupModal.fillAndBlur(data);
+    await signupModal.submit();
     await expect(page).toHaveURL(/\/panel\/garage/);
 
     await page.getByText('Log out', { exact: true }).click();
-    await openSignupModal(page);
+    await homePage.open();
+    await homePage.openSignupModal();
 
-    await fillAndBlur(page, data);
-    await registerButton.click();
+    await signupModal.fillAndBlur(data);
+    await signupModal.submit();
 
-    await expect(page.locator('app-signup-form .alert-danger')).toHaveText('User already exists');
+    await expect(signupModal.serverError).toHaveText('User already exists');
     await expect(page).not.toHaveURL(/\/panel\/garage/);
   });
 });
