@@ -17,4 +17,8 @@ export const env = {
     username: requireEnv('HTTP_AUTH_USERNAME'),
     password: requireEnv('HTTP_AUTH_PASSWORD'),
   },
+  testUser: {
+    email: requireEnv('TEST_USER_EMAIL'),
+    password: requireEnv('TEST_USER_PASSWORD'),
+  },
 };
