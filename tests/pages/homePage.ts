@@ -10,4 +10,8 @@ export class HomePage {
   async openSignupModal(): Promise<void> {
     await this.page.getByRole('button', { name: 'Sign up' }).click();
   }
+
+  async openSigninModal(): Promise<void> {
+    await this.page.getByRole('button', { name: 'Sign In' }).click();
+  }
 }
